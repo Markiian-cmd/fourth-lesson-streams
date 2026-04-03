@@ -20,7 +20,8 @@ app.post('/upload', (req, res) => {
         fs.mkdirSync(uploadDir, { recursive: true });
     }
 
-    const filePath = path.join(uploadDir, 'upload_file1.txt');
+    const uniqueName = `upload_${Date.now()}.txt`;
+    const filePath = path.join(uploadDir, uniqueName);
     const writeStream = fs.createWriteStream(filePath);
 
     req.pipe(writeStream);
@@ -35,20 +36,7 @@ app.post('/upload', (req, res) => {
 });
 
 app.get('/download', (req, res) => {
-    const fileName = req.query.fileName || 'sample-2mb.txt';
-    const filePath = path.join(rootDir, 'public', fileName);
-
-    if (!fs.existsSync(filePath)) {
-        return res.status(404).send('Filenot found');
-    }
-
-    const readStream = fs.createReadStream(filePath);
-    res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
-    readStream.pipe(res);
-});
-
-app.get('/download-compression', (req, res) => {
-    const fileName = req.query.fileName || 'sample-2mb.txt';
+    const fileName = req.query.filename || 'sample-2mb.txt';
     const filePath = path.join(rootDir, 'public', fileName);
 
     if (!fs.existsSync(filePath)) {
@@ -56,12 +44,33 @@ app.get('/download-compression', (req, res) => {
     }
 
     const readStream = fs.createReadStream(filePath);
-    const gZib = zlib.createGzip();
+    
+    readStream.on('error', (error) => {
+        res.status(500).send('Read error: ' + error.message);
+    });
+
+    res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
+    readStream.pipe(res);
+});
+
+app.get('/download-compression', (req, res) => {
+    const fileName = req.query.filename || 'sample-2mb.txt';
+    const filePath = path.join(rootDir, 'public', fileName);
+
+    if (!fs.existsSync(filePath)) {
+        return res.status(404).send('File not found');
+    }
+
+    const readStream = fs.createReadStream(filePath);
+    const gZip = zlib.createGzip();
+
+    readStream.on('error', (err) => res.status(500).send('Read error: ' + err.message));
+    gZip.on('error', (err) => res.status(500).send('Compression error: ' + err.message));
 
     res.setHeader('Content-Encoding', 'gzip');
     res.setHeader('Content-Disposition', `attachment; filename=${fileName}.gz`);
 
-    readStream.pipe(gZib).pipe(res);
+    readStream.pipe(gZip).pipe(res);
 });
 
 app.get('/', (req, res) => {
